@@ -91,8 +91,8 @@ int main() {
         char** curBufferArr = toTokens(buffer); 
         command(curBufferArr, prevBufferArr);
         prevBufferArr = copyTokens(curBufferArr);
+        free(curBufferArr);
     }
-
     return 0;
 }
 
