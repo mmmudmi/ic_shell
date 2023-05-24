@@ -1,7 +1,3 @@
-/* ICCS227: Project 1: icsh
- * Name: Pearploy Chaicharoensin
- * StudentID: 6381278
- */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -95,5 +91,3 @@ int main() {
 
     return 0;
 }
-
-
