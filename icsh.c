@@ -8,10 +8,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 
 
 #define MAX_CMD_BUFFER 255
 #define MAX_LINE_LENGTH 1000
+
+pid_t foregroundJob = 0; //global variables keep track of foregroundJob & process ID
 
 char** toTokens(char* buffer) {
     char** toReturn = malloc(MAX_CMD_BUFFER * sizeof(char*));
@@ -49,7 +52,7 @@ void printToken(char** token, int start) {
 /* Handle command that already exist */
 void externalRunning(char** args){ //commandArr
     int status;
-    int pid;
+    pid_t pid;
 
     /* Create a process space for the ls */
     if ((pid=fork()) < 0)
@@ -72,7 +75,9 @@ void externalRunning(char** args){ //commandArr
         /* 
          * We're in the parent; let's wait for the child to finish
          */
-        waitpid (pid, NULL, 0);
+        foregroundJob = pid; //update 
+        waitpid(pid, &status, 0);
+        foregroundJob = 0;
     }
 }
 
@@ -93,18 +98,34 @@ void command(char** current, char** prev) {
             printf("No previous output\n");
         }
     } else {
-        /* echo */
+        
         if (strcmp(current[0], "echo") == 0 && current[1] != NULL) {
-            printToken(current, 1);
-        /* exit */
-        } else if (strcmp(current[0], "exit") == 0 && current[2] == NULL) {
-            printf("$ echo $?\n%s\n$\n",current[1]);
-            int num = atoi(current[0]);
-            if (num > 255) {
-                num = num & 0xFF;
+            /* echo $? */
+            if (strcmp(current[1], "$?") == 0 && current[2] == NULL) {
+                 printf("%d\n", 0);
+            } 
+            else if (strcmp(current[1], "$?") == 0 && current[2] != NULL) {
+                printToken(current, 1);
             }
-            
-            exit(num);
+            /* echo */
+            else if (strcmp(current[1], "$?") != 0){
+                printToken(current, 1);
+            }           
+        /* exit */
+        } else if (strcmp(current[0], "exit") == 0) {
+            if (current[1] == NULL) {
+                printf("$ echo $?\n0\n$\n");
+                exit(0);
+            }
+            else if (current[2] == NULL)
+            {
+                printf("$ echo $?\n%s\n$\n",current[1]);
+                int num = atoi(current[0]);
+                if (num > 255) {
+                    num = num & 0xFF;
+                }
+                exit(num);
+            }
         } else {
             externalRunning(current);
         }
@@ -132,7 +153,36 @@ void readScripts(char* fileName){
     return;
 }
 
+
+/* SIGNAL */
+void SIGTSTP_handler(int signum){
+    if (foregroundJob) {
+        kill(foregroundJob,SIGTSTP);
+        printf("\n");
+    }
+}
+void SIGINT_handler(int signum){
+    if (foregroundJob) {
+        kill(foregroundJob,SIGINT);
+        printf("\n");
+    }
+}
+
+void signalHandlerSetUP(){
+    struct sigaction sa;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    /* ctrl+C */
+    sa.sa_handler = SIGINT_handler;
+    sigaction(SIGINT, &sa, NULL);
+    /* ctrl+Z */
+    sa.sa_handler = SIGTSTP_handler;
+    sigaction(SIGTSTP, &sa, NULL);
+}
+
+
 int main(int arg, char *argv[]) {
+    signalHandlerSetUP();
     /* Script */
     if (arg > 1) { 
         readScripts(argv[1]);
@@ -142,11 +192,9 @@ int main(int arg, char *argv[]) {
         char buffer[MAX_CMD_BUFFER];
         char** prevBufferArr = toTokens(buffer); 
         printf("Starting IC shell\n");
-
         while (1) {
             printf("icsh $ ");
             fgets(buffer, MAX_CMD_BUFFER, stdin);
-            
             char** curBufferArr = toTokens(buffer); 
             command(curBufferArr, prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
@@ -155,5 +203,4 @@ int main(int arg, char *argv[]) {
     }
     return 0;
 }
-
 
