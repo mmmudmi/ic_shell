@@ -13,7 +13,7 @@
 
 
 #define MAX_CMD_BUFFER 255
-#define MAX_LINE_LENGTH 1000
+#define MAX_LINE_LENGTH 255
 
 /* Global variables */
 pid_t foregroundJob = 0; //keep track of foregroundJob & process ID
