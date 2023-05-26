@@ -1,0 +1,5 @@
+echo hi
+echo hello
+echo Mudmi
+!!
+exit 2
