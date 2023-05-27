@@ -1,3 +1,8 @@
+/* ICCS227: Project 1: icsh
+ * Name: Pearploy Chaicharoensin
+ * StudentID: 6381278
+ * Tag : 0.2.0
+ */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
