@@ -1,11 +1,15 @@
 /* ICCS227: Project 1: icsh
  * Name: Pearploy Chaicharoensin
  * StudentID: 6381278
- * Tag : 0.2.0
+ * Tag : 0.3.0
  */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 
 #define MAX_CMD_BUFFER 255
 #define MAX_LINE_LENGTH 255
@@ -43,8 +47,37 @@ void printToken(char** token, int start) {
     printf("\n");
 }
 
-void command(char** current, char** prev) {
+/* Handle command that already exist */
+void externalRunning(char** args){ //commandArr
+    int status;
+    int pid;
 
+    /* Create a process space for the ls */
+    if ((pid=fork()) < 0)
+    {
+        perror ("Fork failed");
+        exit(1);
+    }
+    if (!pid)
+    {
+    /* This is the child, so execute the ls */
+        status = execvp (args[0], args);
+        if (status < 0) {
+            printf("bad command\n");
+        }
+        exit(1);
+    }
+
+    if (pid)
+    {
+        /* 
+         * We're in the parent; let's wait for the child to finish
+         */
+        waitpid (pid, NULL, 0);
+    }
+}
+
+void command(char** current, char** prev) {
     /* Turns prev to a string */
     char* prev_output = calloc(MAX_LINE_LENGTH, sizeof(char));
     strcpy(prev_output, "");
@@ -74,7 +107,7 @@ void command(char** current, char** prev) {
             
             exit(num);
         } else {
-            printf("bad command\n");
+            externalRunning(current);
         }
     }
 
@@ -114,10 +147,11 @@ int main(int arg, char *argv[]) {
         while (1) {
             printf("icsh $ ");
             fgets(buffer, MAX_CMD_BUFFER, stdin);
+            
             char** curBufferArr = toTokens(buffer); 
             command(curBufferArr, prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
-            free(curBufferArr);
+            free(curBufferArr);        
         }
     }
     return 0;
