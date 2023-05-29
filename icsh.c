@@ -1,7 +1,7 @@
 /* ICCS227: Project 1: icsh
  * Name: Pearploy Chaicharoensin
  * StudentID: 6381278
- * Tag : 0.5.0
+ * Tag : 0.7.0
  */
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +18,8 @@
 
 /* Global variables */
 pid_t foregroundJob = 0; //keep track of foregroundJob & process ID
+char** prevPrevBufferArr;
+
 /* Functions must be declared before being called inside other functions */
 void command(char** , char** );
 void readScripts(char*);
@@ -69,6 +71,15 @@ void printToken(char** token, int start) {
     printf("\n");
 }
 
+char* tokenStr(char** token) {
+    char* toReturn = calloc(MAX_LINE_LENGTH, sizeof(char));
+    strcpy(toReturn, "");
+    for (int i = 1; token[i] != NULL; i++) {
+        strcat(toReturn, token[i]);
+        strcat(toReturn, " ");
+    }
+    return toReturn;
+}
 
 /* I/O Redirection */
 void redir(char** args){
@@ -147,12 +158,14 @@ void externalRunning(char** args){ //commandArr
 
 void command(char** current, char** prev) {
     /* Turns prev to a string */
-    char* prev_output = calloc(MAX_LINE_LENGTH, sizeof(char));
-    strcpy(prev_output, "");
-    for (int i = 1; prev[i] != NULL; i++) {
-        strcat(prev_output, prev[i]);
-        strcat(prev_output, " ");
-    }
+    char* prev_output = tokenStr(prev);
+    char* second_last_output = tokenStr(prevPrevBufferArr);
+    // char* prev_output = calloc(MAX_LINE_LENGTH, sizeof(char));
+    // strcpy(prev_output, "");
+    // for (int i = 1; prev[i] != NULL; i++) {
+    //     strcat(prev_output, prev[i]);
+    //     strcat(prev_output, " ");
+    // }
 
     /* !! */
     if (strcmp(current[0], "!!") == 0 && current[1] == NULL) {
@@ -160,6 +173,13 @@ void command(char** current, char** prev) {
             printf("%s\n", prev_output);
         } else {
             printf("No previous output\n");
+        }
+    /* !!!! Extra Feature: show second last command */ 
+    } else if (strcmp(current[0], "!!!!") == 0 && current[1] == NULL) {
+        if (strcmp(second_last_output, "") != 0) {
+            printf("%s\n", second_last_output);
+        } else {
+            printf("No second last command\n");
         }
     } else {
         
@@ -267,13 +287,15 @@ int main(int arg, char *argv[]) {
     /* User Input */
     else {
         char buffer[MAX_CMD_BUFFER];
-        char** prevBufferArr = toTokens(buffer); 
+        char** prevBufferArr = toTokens(buffer);
+        prevPrevBufferArr = toTokens(buffer); 
         printf("Starting IC shell\n");
         while (1) {
             printf("icsh $ ");
             fgets(buffer, MAX_CMD_BUFFER, stdin);
             char** curBufferArr = toTokens(buffer); 
             command(curBufferArr, prevBufferArr);
+            prevPrevBufferArr = copyTokens(prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
             free(curBufferArr);        
         }
