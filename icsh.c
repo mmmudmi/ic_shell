@@ -14,7 +14,7 @@
 
 
 #define MAX_CMD_BUFFER 255
-#define MAX_LINE_LENGTH 255  //fixed
+#define MAX_LINE_LENGTH 255 
 
 /* Global variables */
 pid_t foregroundJob = 0; //keep track of foregroundJob & process ID
@@ -125,12 +125,11 @@ void externalRunning(char** args){ //commandArr
     if (!pid)
     {
     /* This is the child, so execute the ls */
-        redir(args);
+        //redir(args);
         status = execvp (args[0], args);
         if (status < 0) {
-            //printf("bad command\n");
-            fprintf(stderr, "bad command\n");
-            exit(1);
+            printf("bad command\n");
+            //fprintf(stderr, "bad command\n");
         }
         exit(1);
     }
@@ -192,7 +191,21 @@ void command(char** current, char** prev) {
                 exit(num);
             }
         } else {
-            externalRunning(current);
+            int isRedir = 0;
+            int i = 0;
+            while (current[i] != NULL) {
+                if (strcmp(current[i], "<") == 0 || strcmp(current[i], ">") == 0) {
+                    isRedir = 1;
+                    break;
+                }
+                i++;
+            }
+            if (isRedir) {
+                redir(current);
+            } else {
+                externalRunning(current);
+            }
+        
         }
     }
 
