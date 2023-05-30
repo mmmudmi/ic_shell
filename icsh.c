@@ -20,7 +20,7 @@
 pid_t foregroundJob = 0; //keep track of foregroundJob & process ID
 char** prevPrevBufferArr;
 int isRunningBG = 0 ;
-int currentJobID = 1; //the one that is working on
+//int currentJobID = 1; //the one that is working on
 int jobID = 0; //ID starts at 0 and so on //count
 
 /* Functions must be declared before being called inside other functions */
@@ -31,11 +31,18 @@ typedef struct BG
 {
     int jobID;
     char* processStatus;
+    int status; //in number running stoped done
     char* commands;
     int pid;
+    int isStopped;
 } job;
 
-job jobList[1000]; //limit 1000 jobs only
+job jobList[100]; //limit 100 jobs only
+pid_t stoppedJob[100]; //store all the job that stopped by ctrlZ
+//declare
+
+
+
 
 char** toTokens(char* buffer) {
     char** toReturn = malloc(MAX_CMD_BUFFER * sizeof(char*));
@@ -136,7 +143,37 @@ void redir(char** args){
     fflush(stdout);
     return;
 }
+void updateJobList(){
+    int status;
+    pid_t pid;
+    for (int i = 1; i <= jobID; i++){
+        pid = waitpid(jobList[i].pid, &status, WNOHANG);
+        if(pid > 0) {
+            if (WIFEXITED(status)) {
+                jobList[i].status = 0;
+                jobList[i].processStatus = "Done";
+                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
 
+            } else if (WIFSIGNALED(status)) {
+                jobList[i].status = 0;
+                jobList[i].processStatus = "Terminated"; 
+                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
+            } else if (WIFSTOPPED(status)) {
+                jobList[i].status = 0;
+                jobList[i].processStatus = "Stopprd"; 
+                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
+            } else if (WIFCONTINUED(status)) {
+                jobList[i].status = 0;
+                jobList[i].processStatus = "Running"; 
+                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
+            }
+        } else if (pid < 0 ){
+            perror("waitpid");
+            exit(1);
+        }
+    }
+    
+}
 
 /* Handle command that already exist */
 void externalRunning(char** args){ //commandArr
@@ -151,7 +188,6 @@ void externalRunning(char** args){ //commandArr
     if (!pid)
     {
     /* This is the child, so execute the ls */
-
         status = execvp (args[0], args);
         if (status < 0) {
             printf("bad command\n");
@@ -167,6 +203,7 @@ void externalRunning(char** args){ //commandArr
         foregroundJob = pid; //update 
         waitpid(pid, &status, 0);
         foregroundJob = 0;
+        updateJobList();
     }
 }
 
@@ -175,13 +212,17 @@ void printJobList(int from){
     char sign = '-';
     for (int i = from; i <= jobID; i++)
     {          
-        printf("[%d]%c %s                 %s\n",i,sign,jobList[i].processStatus,jobList[i].commands); 
-        sign = '+';
+        if(strcasecmp(jobList[i].processStatus,"Running") == 0 || strcasecmp(jobList[i].processStatus, "Stopped") == 0) {
+            printf("[%d]%c %s                 %s\n",i,sign,jobList[i].processStatus,jobList[i].commands); 
+            sign = '+';
+        }
     }
 }
     
 
+
 void command(char** current, char** prev) {
+    int status;
     /* Turns prev to a string */
     char* prev_output = tokenStr(prev,1);
     char* second_last_output = tokenStr(prevPrevBufferArr,1);
@@ -200,8 +241,31 @@ void command(char** current, char** prev) {
         } else {
             printf("No second last command\n");
         }
+    /* jobs */
     } else if (strcmp(current[0], "jobs") == 0 && current[1] == NULL) {
-        printJobList(currentJobID);
+        printJobList(1);
+    /* fg %<job_id> */
+    } else if (strcmp(current[0], "fg") == 0 && current[1] != NULL && current[2] == NULL) {
+        int id;
+        if (strlen(current[1]) < 2){
+            id = -1;
+        } else{
+            char* job_ID = current[1] + 1;// Remove % 
+            id =  atoi(job_ID); 
+        } 
+        
+        if (id > 0 && id <= jobID) {
+            pid_t job_pid = jobList[id].pid;
+            if (job_pid != -1) {
+                foregroundJob = job_pid;
+                kill(job_pid, SIGCONT);
+                waitpid(job_pid, &status, WUNTRACED);
+                updateJobList();
+            } 
+        } else {
+            printf("Invalid Job ID\n");
+        }
+        foregroundJob = -1;
     } else {
         
         if (strcmp(current[0], "echo") == 0 && current[1] != NULL) {
@@ -250,21 +314,23 @@ void command(char** current, char** prev) {
                 redir(current);
             } else {
                 if(isJobBG) {
-                    pid_t pid;
-                    if ((pid=fork()) < 0){
+                    pid_t pid = fork();
+                    if (pid < 0){
                         perror ("Fork failed");
                         exit(1);
                     } else if (pid == 0){ //child
-                        externalRunning(current);
+                        foregroundJob = getpid();
+                        externalRunning(current);                        
                         exit(1);
                     } else { //parent
-                        // Implement jobList
+                        //Add new job to the jobList
                         jobID++;
                         jobList[jobID].jobID = jobID;
                         jobList[jobID].processStatus = "Running";
                         jobList[jobID].commands = current_input;
                         jobList[jobID].pid = pid;
-                        printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);  //print PID for the current JOB
+                        jobList[jobID].isStopped = 0; //default
+                        printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid); 
                     }
                 } else {
                     externalRunning(current);
@@ -296,15 +362,34 @@ void readScripts(char* fileName){
 }
 
 
+
 /* SIGNAL */
 void signalHandler(int signum){
+    if (signum == SIGCHLD && foregroundJob){
+        updateJobList();
+    }
+    
     if (signum == SIGINT && foregroundJob) {
         kill(foregroundJob,SIGINT);
-        printf("The current foreground job killed\n");
+        printf("The current foreground job was killed");
     }
-        if (signum == SIGTSTP && foregroundJob) {
-        kill(foregroundJob,SIGTSTP);
-        printf("The current foreground job suspended\n");
+    if (signum == SIGTSTP && foregroundJob) {
+        job currentJob;
+        for (int i = 1; i<=jobID;i++){
+            if (jobList[i].pid == foregroundJob) {
+                currentJob = jobList[i];
+            }
+        }
+        if (!currentJob.isStopped) {
+            stoppedJob[currentJob.jobID] = foregroundJob;
+            currentJob.isStopped = 1;
+            kill(foregroundJob, SIGTSTP);
+            printf("The current foreground job was suspended.\n");
+        } else if (currentJob.isStopped) {
+            printf("The given job is already suspended\n");
+        } else {
+            printf("Invalid Job ID\n");
+        }
     }
     printf("\n");
 }
@@ -318,11 +403,18 @@ void signalHandlerSetUP(){
     sigaction(SIGINT, &sa, NULL);
     /* ctrl+Z */
     sigaction(SIGTSTP, &sa, NULL);
+    /* Child */
+    sigaction(SIGCHLD, &sa, NULL);
+
 }
 
 
 int main(int arg, char *argv[]) {
     signalHandlerSetUP();
+    //set up stoppedJob
+    for (int i = 0 ; i<100 ; i++) {
+    stoppedJob[i] = -1;
+    }
     /* Script */
     if (arg > 1) { 
         readScripts(argv[1]);
@@ -341,7 +433,9 @@ int main(int arg, char *argv[]) {
             prevPrevBufferArr = copyTokens(prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
             free(curBufferArr);        
+            updateJobList();
         }
+
     }
     return 0;
 }
