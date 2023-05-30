@@ -150,26 +150,14 @@ void updateJobList(){
         pid = waitpid(jobList[i].pid, &status, WNOHANG);
         if(pid > 0) {
             if (WIFEXITED(status)) {
-                jobList[i].status = 0;
                 jobList[i].processStatus = "Done";
                 printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
 
             } else if (WIFSIGNALED(status)) {
-                jobList[i].status = 0;
                 jobList[i].processStatus = "Terminated"; 
                 printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
-            } else if (WIFSTOPPED(status)) {
-                jobList[i].status = 0;
-                jobList[i].processStatus = "Stopprd"; 
-                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
-            } else if (WIFCONTINUED(status)) {
-                jobList[i].status = 0;
-                jobList[i].processStatus = "Running"; 
-                printf("[%d]+ %s                 %s",i,jobList[i].processStatus,jobList[i].commands); 
+
             }
-        } else if (pid < 0 ){
-            perror("waitpid");
-            exit(1);
         }
     }
     
@@ -246,26 +234,20 @@ void command(char** current, char** prev) {
         printJobList(1);
     /* fg %<job_id> */
     } else if (strcmp(current[0], "fg") == 0 && current[1] != NULL && current[2] == NULL) {
-        int id;
-        if (strlen(current[1]) < 2){
-            id = -1;
-        } else{
-            char* job_ID = current[1] + 1;// Remove % 
-            id =  atoi(job_ID); 
-        } 
         
-        if (id > 0 && id <= jobID) {
-            pid_t job_pid = jobList[id].pid;
-            if (job_pid != -1) {
-                foregroundJob = job_pid;
-                kill(job_pid, SIGCONT);
-                waitpid(job_pid, &status, WUNTRACED);
-                updateJobList();
-            } 
+        
+        
+        int givenJobID = atoi(current[1]);
+        if (givenJobID > 0 && givenJobID <= jobID && jobList[givenJobID].pid == stoppedJob[givenJobID]) {
+            kill(stoppedJob[givenJobID], SIGCONT);
+            foregroundJob = stoppedJob[givenJobID];
+            stoppedJob[givenJobID] = -1;
+            waitpid(foregroundJob, &status, 0);
+            updateJobList();
         } else {
-            printf("Invalid Job ID\n");
+            printf("Invalid jobID\n");
         }
-        foregroundJob = -1;
+        return;
     } else {
         
         if (strcmp(current[0], "echo") == 0 && current[1] != NULL) {
