@@ -1,7 +1,7 @@
 /* ICCS227: Project 1: icsh
  * Name: Pearploy Chaicharoensin
  * StudentID: 6381278
- * Tag : 0.7.0
+ * Tag : 0.6.0
  */
 #include <stdio.h>
 #include <string.h>
@@ -19,11 +19,23 @@
 /* Global variables */
 pid_t foregroundJob = 0; //keep track of foregroundJob & process ID
 char** prevPrevBufferArr;
+int isRunningBG = 0 ;
+int currentJobID = 1; //the one that is working on
+int jobID = 0; //ID starts at 0 and so on //count
 
 /* Functions must be declared before being called inside other functions */
 void command(char** , char** );
 void readScripts(char*);
 
+typedef struct BG
+{
+    int jobID;
+    char* processStatus;
+    char* commands;
+    int pid;
+} job;
+
+job jobList[1000]; //limit 1000 jobs only
 
 char** toTokens(char* buffer) {
     char** toReturn = malloc(MAX_CMD_BUFFER * sizeof(char*));
@@ -31,6 +43,9 @@ char** toTokens(char* buffer) {
     int i = 0;
     while (token != NULL) {
         toReturn[i] = token;
+        if(strcmp(token,"&")){
+            isRunningBG++;
+        }
         token = strtok(NULL, " \t\n");
         i++;
     }
@@ -71,10 +86,10 @@ void printToken(char** token, int start) {
     printf("\n");
 }
 
-char* tokenStr(char** token) {
+char* tokenStr(char** token, int from) {
     char* toReturn = calloc(MAX_LINE_LENGTH, sizeof(char));
     strcpy(toReturn, "");
-    for (int i = 1; token[i] != NULL; i++) {
+    for (int i = from; token[i] != NULL; i++) {
         strcat(toReturn, token[i]);
         strcat(toReturn, " ");
     }
@@ -122,11 +137,11 @@ void redir(char** args){
     return;
 }
 
+
 /* Handle command that already exist */
 void externalRunning(char** args){ //commandArr
     int status;
     pid_t pid;
-
     /* Create a process space for the ls */
     if ((pid=fork()) < 0)
     {
@@ -136,11 +151,10 @@ void externalRunning(char** args){ //commandArr
     if (!pid)
     {
     /* This is the child, so execute the ls */
-        //redir(args);
+
         status = execvp (args[0], args);
         if (status < 0) {
             printf("bad command\n");
-            //fprintf(stderr, "bad command\n");
         }
         exit(1);
     }
@@ -156,23 +170,28 @@ void externalRunning(char** args){ //commandArr
     }
 }
 
+void printJobList(int from){
+    printf("");
+    char sign = '-';
+    for (int i = from; i <= jobID; i++)
+    {          
+        printf("[%d]%c %s                 %s\n",i,sign,jobList[i].processStatus,jobList[i].commands); 
+        sign = '+';
+    }
+}
+    
+
 void command(char** current, char** prev) {
     /* Turns prev to a string */
-    char* prev_output = tokenStr(prev);
-    char* second_last_output = tokenStr(prevPrevBufferArr);
-    // char* prev_output = calloc(MAX_LINE_LENGTH, sizeof(char));
-    // strcpy(prev_output, "");
-    // for (int i = 1; prev[i] != NULL; i++) {
-    //     strcat(prev_output, prev[i]);
-    //     strcat(prev_output, " ");
-    // }
-
+    char* prev_output = tokenStr(prev,1);
+    char* second_last_output = tokenStr(prevPrevBufferArr,1);
+    char* current_input = tokenStr(current,0);
     /* !! */
     if (strcmp(current[0], "!!") == 0 && current[1] == NULL) {
         if (strcmp(prev_output, "") != 0) {
             printf("%s\n", prev_output);
         } else {
-            printf("No previous output\n");
+            printf("No previous command\n");
         }
     /* !!!! Extra Feature: show second last command */ 
     } else if (strcmp(current[0], "!!!!") == 0 && current[1] == NULL) {
@@ -181,6 +200,8 @@ void command(char** current, char** prev) {
         } else {
             printf("No second last command\n");
         }
+    } else if (strcmp(current[0], "jobs") == 0 && current[1] == NULL) {
+        printJobList(currentJobID);
     } else {
         
         if (strcmp(current[0], "echo") == 0 && current[1] != NULL) {
@@ -212,10 +233,15 @@ void command(char** current, char** prev) {
             }
         } else {
             int isRedir = 0;
+            int isJobBG = 0;
             int i = 0;
             while (current[i] != NULL) {
                 if (strcmp(current[i], "<") == 0 || strcmp(current[i], ">") == 0) {
                     isRedir = 1;
+                    break;
+                } else if (strcmp(current[i], "&") == 0 ) {
+                    isJobBG = 1;
+                    current[i] = NULL; //remove last
                     break;
                 }
                 i++;
@@ -223,12 +249,29 @@ void command(char** current, char** prev) {
             if (isRedir) {
                 redir(current);
             } else {
-                externalRunning(current);
+                if(isJobBG) {
+                    pid_t pid;
+                    if ((pid=fork()) < 0){
+                        perror ("Fork failed");
+                        exit(1);
+                    } else if (pid == 0){ //child
+                        externalRunning(current);
+                        exit(1);
+                    } else { //parent
+                        // Implement jobList
+                        jobID++;
+                        jobList[jobID].jobID = jobID;
+                        jobList[jobID].processStatus = "Running";
+                        jobList[jobID].commands = current_input;
+                        jobList[jobID].pid = pid;
+                        printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);  //print PID for the current JOB
+                    }
+                } else {
+                    externalRunning(current);
+                }
             }
-        
         }
     }
-
     free(prev_output);
 }
 
@@ -257,11 +300,11 @@ void readScripts(char* fileName){
 void signalHandler(int signum){
     if (signum == SIGINT && foregroundJob) {
         kill(foregroundJob,SIGINT);
-        printf("\n");
+        printf("The current foreground job killed\n");
     }
         if (signum == SIGTSTP && foregroundJob) {
         kill(foregroundJob,SIGTSTP);
-        printf("\n");
+        printf("The current foreground job suspended\n");
     }
     printf("\n");
 }
