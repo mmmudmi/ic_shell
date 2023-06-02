@@ -25,6 +25,7 @@
   
 ## Tag 0.6.0 Background jobs and job control
   - command followed by "&" : will run as a background job
+    - listed in the jobList[100] with 100 jobs limit
   - jobs : this command will list all the current jobs that are running/stopped
   - fg %<job_id> : Brings the job identified by <job_id> into the foreground 
     - does not continue, but start from the beginning
@@ -32,7 +33,11 @@
     - does not continue, but start from the beginning, run in fg instead
 
 ## Tag 0.7.0 Extra features
-  - Allowing users to customize their prompt at the beginning of the program (or can choose the default version)
+  - Allowing users to customize their prompt at the beginning of the program
+    - Can type the prompt text
+    - Choose a font color (pink/red/green/yellow/blue/white)
+    - Choose styles (bold,underline)
+    - Or choose the default version "icsh $ "
   - help() : this command return the instructions of this IC SHELL
   - !!!! : repeat the second last command
 
