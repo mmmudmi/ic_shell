@@ -4,7 +4,7 @@
 # ICSH
 
 ## Tag 0.1.0 Interactive command-line interpreter
-  - exho <text> : print text on the console
+  - excho <text> : print text on the console
   - !!          : repeat the last command
   - exit <num>  : exit with the given exit code
   
