@@ -332,19 +332,23 @@ void redir(char** args){
 }
 
 void addJob(pid_t pid, char * command){
-    jobID++;
-    jobList[jobID].jobID = jobID;
-    jobList[jobID].commands = command;
-    jobList[jobID].pid = pid;
-    if (foregroundJob) { //pressed ctrl z
-        foregroundJob = 0 ;
-        jobList[jobID].isStopped = 1; 
-        jobList[jobID].processStatus = "Stopped";
-        printf("\n[%d]+ Stopped                 %s\n",jobList[jobID].jobID,jobList[jobID].commands); 
+    if(jobID == 1000) {
+        printf("You've reached the jobs limit which is 1,000\n");
     } else {
-        jobList[jobID].isStopped = 0; 
-        jobList[jobID].processStatus = "Running";
-        printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);       
+        jobID++;
+        jobList[jobID].jobID = jobID;
+        jobList[jobID].commands = command;
+        jobList[jobID].pid = pid;
+        if (foregroundJob) { //pressed ctrl z
+            foregroundJob = 0 ;
+            jobList[jobID].isStopped = 1; 
+            jobList[jobID].processStatus = "Stopped";
+            printf("\n[%d]+ Stopped                 %s\n",jobList[jobID].jobID,jobList[jobID].commands); 
+        } else {
+            jobList[jobID].isStopped = 0; 
+            jobList[jobID].processStatus = "Running";
+            printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);       
+        }
     }
 }
 
@@ -393,7 +397,7 @@ void externalRunning(char** args){ //commandArr
 void printJobList(){
     char sign = '-';
     for (int i = 1; i <= jobID; i++)
-    {          
+    { 
         if(strcasecmp(jobList[i].processStatus,"Running") == 0) {
             printf("[%d]%c %s                 %s\n",i,sign,jobList[i].processStatus,jobList[i].commands); 
             sign = '+';
@@ -406,12 +410,11 @@ void printJobList(){
 void fg(int id){
     if (id <= jobID && id > 0 && strcmp(jobList[id].processStatus,"Done")!=0) {
             int status;
-            printf("%s\n",jobList[id].commands);
             jobList[id].isStopped = 0;
             jobList[id].processStatus = "Running"; //back to work
+            printf("[%d] %d\n",jobList[id].jobID,jobList[id].pid);
             kill(jobList[id].pid, SIGCONT); // resume the process
             foregroundJob = 1; //back to foreground
-            //printf("%d bg\n",jobList[id].pid);
             waitpid(jobList[id].pid, &status, 0); // Wait for the process to finish
             externalRunning(toTokens(jobList[id].commands));
     } else {
@@ -421,15 +424,24 @@ void fg(int id){
 
 void bg(int id){
     if (id <= jobID && id > 0 && jobList[id].isStopped == 1) {
-        int status;
-        printf("%s\n",jobList[id].commands);
-        foregroundJob = 0; //in background
         jobList[id].isStopped = 0;
         jobList[id].processStatus = "Running"; //back to work
-        //strcat(jobList[id].commands,"&");
-        //printf("%d bg\n",jobList[id].pid);
         kill(jobList[id].pid, SIGCONT); // resume the process
-        externalRunning(toTokens(jobList[id].commands));
+        foregroundJob = 0; //in background
+        int status;
+        pid_t pid = fork(); 
+        if (pid < 0){
+            perror ("Fork failed");
+            exit(1);
+        } else if (!pid){  //run in bg
+            status = execvp (jobList[id].commands[0], jobList[id].commands);
+            if (status < 0) {
+                printf("bad command\n");
+                exit(1);  
+            }
+        } else { //parent 
+            printf("[%d]+ %s&\n",jobList[id].jobID,jobList[id].commands);
+        }
     } else {
         printf("Invalid job ID\n");
     }
