@@ -26,8 +26,10 @@
 ## Tag 0.6.0 Background jobs and job control
   - command followed by "&" : will run as a background job
   - jobs : this command will list all the current jobs that are running/stopped
-  - fg %<job_id> : Brings the job identified by <job_id> into the foreground (SIGCONT not working)
-  - bg %<job_id> : Execute the suspended job identified by <job_id> in the background (SIGCONT not working)
+  - fg %<job_id> : Brings the job identified by <job_id> into the foreground 
+    - does not continue, but start from the beginning
+  - bg %<job_id> : Execute the suspended job identified by <job_id> in the background 
+    - does not continue, but start from the beginning, run in fg instead
 
 ## Tag 0.7.0 Extra features
   - Allowing users to customize their prompt at the beginning of the program (or can choose the default version)
