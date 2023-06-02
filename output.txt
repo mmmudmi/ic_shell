@@ -1,7 +1,0 @@
-hi 
-hello 
-Mudmi 
-Mudmi 
-$ echo $?
-2
-$
