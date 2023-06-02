@@ -1,8 +1,9 @@
 /* ICCS227: Project 1: icsh
  * Name: Pearploy Chaicharoensin
  * StudentID: 6381278
- * Tag : 0.6.0
+ * Tag : 0.7.0
  */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -16,8 +17,10 @@
 #define MAX_LINE_LENGTH 255 
 
 /* Global variables */
+char** prevPrevBufferArr;
 char** prevBufferArr;
 char** curBufferArr;
+char prompt[MAX_CMD_BUFFER];
 int isRedir = 0;
 int foregroundJob = 0;
 int jobID = 0; //count jobID
@@ -26,6 +29,7 @@ int jobID = 0; //count jobID
 void command(char** , char** );
 void readScripts(char*);
 void signalhandler(int);
+void printHelp();
 
 typedef struct BG
 {
@@ -104,6 +108,187 @@ char* removeFirst(char* input) {
     return toReturn;
 }
 
+void printHelp() {
+    printf("-------------------------------------------+------------------------------------\n");
+    printf("                 Explanation               |                Command             \n");
+    printf("-------------------------------------------+------------------------------------\n");
+    printf("> To print                                 | \"echo <message wanted to print>\" \n");
+    printf("> To quit                                  | \"exit <num>\" \n");
+    printf("> To see last command                      | \"!!\"\n");
+    printf("> *EXTRA* To see second last command       | \"!!!!\"\n");
+    printf("> *EXTRA* To print the instructions        | \"help\"\n");
+    printf("> To read script                           | \"<filenam>\"\n");
+    printf("> To stop foreground job                   | Ctrl+Z\n");
+    printf("> To terminate foreground job              | Ctrl+C\n");
+    printf("> To print exit status of previous command | \"echo $?\"\n");
+    printf("> To redirection                           | < input > output\n");
+    printf("> To run background job                    | end with \"&\"\n");
+    printf("> To list current jobs                     | \"jobs\"\n");
+    printf("> To bring bg job to fg                    | \"fg %%<job_id>\"\n");
+    printf("> To run stopped job in the bg             | \"bg %%<job_id>\"\n");
+    printf("--------------------------------------------------------------------------------\n");
+    printf("> Other exist shell command can be use here\n");
+    printf("--------------------------------------------------------------------------------\n");
+}
+
+void start(){ //--> Extra Feature: customize the prompt and printHelp()
+    int bold;
+    int underline;
+    int defaultPrompt; //icsh $ 
+    char* text;
+    char* color;
+    char inputBuffer[MAX_CMD_BUFFER];
+    int noResponse = 1;
+    printf("\n** First of all, let's set up the prompt **\n");
+    /*DEFAULT*/
+    while (noResponse){
+        printf("Do you want to use a default prompt (y/n) : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer);
+        if (input[0]!=NULL && input[1]==NULL){
+            if (strcmp(input[0],"y")==0) {
+                defaultPrompt = 1;
+                noResponse = 0;
+            } else if (strcmp(input[0],"n")==0){
+                defaultPrompt = 0;
+                noResponse = 0;
+            } else {
+                printf("Invalid input\n");
+            }
+        } else {
+            printf("Invalid input\n");
+        }
+    }
+    noResponse = 1;
+    /*TEXT*/
+    while (noResponse && !defaultPrompt){
+        printf("Enter prompt text : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer);
+        text = tokenStr(input,0); 
+        if (strlen(text) != 0){
+            noResponse = 0;
+        } else {
+            printf("Invalid input\n");
+        }
+    }
+    noResponse = 1;
+    /*BOLD*/
+    while (noResponse && !defaultPrompt){
+        printf("Bold Text (y/n) : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer); 
+        if (input[0]!=NULL && input[1]==NULL){
+            if (strcmp(input[0],"y")==0) {
+                bold = 1;
+                noResponse = 0;
+            } else if (strcmp(input[0],"n")==0){
+                bold = 0;
+                noResponse = 0;
+            } else {
+                printf("Invalid input\n");
+            }
+        } else {
+            printf("Invalid input\n");
+        }
+    }
+    noResponse = 1;
+    /*UNDERLINE*/
+    while (noResponse && !defaultPrompt){
+        printf("Underline Text (y/n) : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer); 
+        if (input[0]!=NULL && input[1]==NULL){
+            if (strcmp(input[0],"y")==0) {
+                underline = 1;
+                noResponse = 0;
+            } else if (strcmp(input[0],"n")==0){
+                underline = 0;
+                noResponse = 0;
+            } else {
+                printf("Invalid input\n");
+            }
+        } else {
+            printf("Invalid input\n");
+        }
+    }
+    noResponse = 1;
+    /*COLOR*/
+    while (noResponse && !defaultPrompt){
+        printf("Font color (pink/red/green/yellow/blue/white) : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer); 
+        if (input[0]!=NULL && input[1]==NULL){
+            if (strcmp(input[0],"red") == 0){
+                color = "\033[31m";
+                noResponse = 0;
+            } else if (strcmp(input[0],"green")  == 0 ){
+                color = "\033[32m";
+                noResponse = 0;
+            } else if (strcmp(input[0],"yellow")  == 0 ){
+                color = "\033[33m";
+                noResponse = 0;
+            } else if (strcmp(input[0],"blue")  == 0 ){
+                color = "\033[34m";
+                noResponse = 0;
+            } else if (strcmp(input[0],"white")  == 0 ){
+                color = "\033[37m";
+                noResponse = 0;
+            } else if (strcmp(input[0],"pink")  == 0 ){
+                color = "\033[1;35m";
+                noResponse = 0;
+            } else {
+                printf("Invalid input\n");
+            }
+        } else {
+            printf("Invalid input\n");
+        }
+    }
+    
+    if (defaultPrompt) {
+        strcat(prompt,"icsh $ ");
+    } else {
+        if(bold) {strcat(prompt,"\033[1m");}
+        if(underline) {strcat(prompt,"\033[4m");}
+        strcat(prompt,color);
+        strcat(prompt,text);
+        strcat(prompt,"\033[0m"); //end
+    }
+    noResponse = 1;
+    while (noResponse)
+    {
+        printf("Do you want to see the instruction (y/n) : ");
+        fgets(inputBuffer, MAX_CMD_BUFFER, stdin);
+        char** input = toTokens(inputBuffer); 
+        if (input[0]!=NULL && input[1]==NULL){
+            if (strcmp(input[0],"y")==0) {
+                printHelp();
+                noResponse = 0;
+            } else if (strcmp(input[0],"n")==0){
+                noResponse = 0;
+            } else {
+                printf("Invalid input\n");
+            }
+        } else {
+            printf("Invalid input\n");
+        } 
+    }
+    
+    printf("\n─────────▄▀▀▀▄▄▄▄▄▄▄▀▀▀▄───────────\n");
+    printf("─────────█▒▒░░░░░░░░░▒▒█───────────\n");
+    printf("──────────█░░█░░░░░█░░█────────────\n");
+    printf("───────▄▄──█░░░▀█▀░░░█──▄▄─────────\n");
+    printf("──────█░░█─▀▄░░░░░░░▄▀─█░░█────────\n");
+    printf("█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█\n");
+    printf("█░░█▀ ▀█▀ ▄▀█ █▀█ ▀█▀ █ █▄░█ █▀▀░░█\n");
+    printf("█░░▄█ ░█░ █▀█ █▀▄ ░█░ █ █░▀█ █▄█░░█\n");
+    printf("█░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█\n");
+    printf("█░░░░█ █▀▀░░░░█▀ █░█ █▀▀ █░░ █░░░░█\n");
+    printf("█░░░░█ █▄▄░░░░▄█ █▀█ ██▄ █▄▄ █▄▄░░█\n"); 
+    printf("█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█\n");
+    printf("\n");
+}
+
 /* I/O Redirection */
 void redir(char** args){
     int in;
@@ -148,19 +333,23 @@ void redir(char** args){
 }
 
 void addJob(pid_t pid, char * command){
-    jobID++;
-    jobList[jobID].jobID = jobID;
-    jobList[jobID].commands = command;
-    jobList[jobID].pid = pid;
-    if (foregroundJob) { //pressed ctrl z
-        foregroundJob = 0;
-        jobList[jobID].isStopped = 1; 
-        jobList[jobID].processStatus = "Stopped";
-        printf("\n[%d]+ Stopped                 %s\n",jobList[jobID].jobID,jobList[jobID].commands); 
+    if(jobID == 1000) {
+        printf("You've reached the jobs limit which is 1,000\n");
     } else {
-        jobList[jobID].isStopped = 0; 
-        jobList[jobID].processStatus = "Running";
-        printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);       
+        jobID++;
+        jobList[jobID].jobID = jobID;
+        jobList[jobID].commands = command;
+        jobList[jobID].pid = pid;
+        if (foregroundJob) { //pressed ctrl z
+            foregroundJob = 0 ;
+            jobList[jobID].isStopped = 1; 
+            jobList[jobID].processStatus = "Stopped";
+            printf("\n[%d]+ Stopped                 %s\n",jobList[jobID].jobID,jobList[jobID].commands); 
+        } else {
+            jobList[jobID].isStopped = 0; 
+            jobList[jobID].processStatus = "Running";
+            printf("[%d] %d\n", jobList[jobID].jobID,jobList[jobID].pid);       
+        }
     }
 }
 
@@ -209,7 +398,7 @@ void externalRunning(char** args){ //commandArr
 void printJobList(){
     char sign = '-';
     for (int i = 1; i <= jobID; i++)
-    {          
+    { 
         if(strcasecmp(jobList[i].processStatus,"Running") == 0) {
             printf("[%d]%c %s                 %s\n",i,sign,jobList[i].processStatus,jobList[i].commands); 
             sign = '+';
@@ -259,11 +448,11 @@ void bg(int id){
     }
 }
 
-
 void command(char** current, char** prev) {
     int status;
     /* Turns prev to a string */
     char* prev_output = tokenStr(prev,1);
+    char* second_last_output = tokenStr(prevPrevBufferArr,1);
     char* current_input = tokenStr(current,0);
     /* !! */
     if (strcmp(current[0], "!!") == 0 && current[1] == NULL) {
@@ -272,6 +461,16 @@ void command(char** current, char** prev) {
         } else {
             printf("No previous command\n");
         }
+    /* !!!! ---> Extra Feature: show second last command */ 
+    } else if (strcmp(current[0], "!!!!") == 0 && current[1] == NULL) {
+        if (strcmp(second_last_output, "") != 0) {
+            printf("%s\n", second_last_output);
+        } else {
+            printf("No second last command\n");
+        }
+    /* help --> Extra Feature: show the instruction */ 
+    } else if (strcmp(current[0], "help") == 0 && current[1] == NULL) {
+        printHelp();
     /* jobs */
     } else if (strcmp(current[0], "jobs") == 0 && current[1] == NULL) {
         printJobList();
@@ -283,6 +482,7 @@ void command(char** current, char** prev) {
             char* removedSign = removeFirst(current[1]);
             int givenJobID = atoi(removedSign);
             fg(givenJobID);
+            //free(removedSign);
         }
     /* bg %<job_id> */
     } else if (strcmp(current[0], "bg") == 0 && current[1] != NULL && current[2] == NULL) {
@@ -363,9 +563,11 @@ void readScripts(char* fileName){
     else {
         char buffer[MAX_CMD_BUFFER];
         prevBufferArr = toTokens(buffer); 
+        prevPrevBufferArr = toTokens(buffer);
         while (fgets(buffer, MAX_LINE_LENGTH, file) != NULL) {
             curBufferArr = toTokens(buffer); 
             command(curBufferArr, prevBufferArr);
+            prevPrevBufferArr = copyTokens(prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
             free(curBufferArr);
         }
@@ -410,12 +612,15 @@ int main(int arg, char *argv[]) {
     else {
         char buffer[MAX_CMD_BUFFER];
         prevBufferArr = toTokens(buffer);
-        printf("Starting IC SHELL\n");
+        prevPrevBufferArr = toTokens(buffer);
+        strcpy(prompt,""); //default 
+        start(); //--> EXTRA FEATURE in here
         while (1) {
-            printf("icsh $ ");
+            printf("%s",prompt);
             fgets(buffer, MAX_CMD_BUFFER, stdin);
             curBufferArr = toTokens(buffer); 
             command(curBufferArr, prevBufferArr);
+            prevPrevBufferArr = copyTokens(prevBufferArr);
             prevBufferArr = copyTokens(curBufferArr);
             free(curBufferArr);        
             updateJobList();
