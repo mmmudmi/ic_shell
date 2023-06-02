@@ -98,9 +98,8 @@ char* tokenStr(char** token, int from) {
     return toReturn;
 }
 
-char* removeFirst(char* input) {
+char* removeFirst(char* input) { //remove the first char of a str
     char* toReturn = calloc(MAX_LINE_LENGTH, sizeof(char));
-    //toReturn[0] = '\0'; 
     int len = strlen(input);
     for (int i = 0; i <= len; i++) {
         toReturn[i] = input[i+1];
@@ -357,9 +356,9 @@ void updateJobList(){
     int status;
     pid_t pid;
     for (int i = 1; i <= jobID; i++){
-        pid = waitpid(jobList[i].pid, &status, WNOHANG);
-        if(pid > 0) {
-            if (WIFEXITED(status)) {  
+        pid = waitpid(jobList[i].pid, &status, WNOHANG); 
+        if(pid > 0) { //check whether the code w/ PID is finished or not
+            if (WIFEXITED(status)) { 
                 jobList[i].processStatus = "Done"; 
             }
             printf("[%d]+ %s                 %s\n",i,jobList[i].processStatus,jobList[i].commands); 
@@ -377,9 +376,9 @@ void externalRunning(char** args){ //commandArr
         perror ("Fork failed");
         exit(1);
     } else if (!pid){
-    /* This is the child, so execute the ls */
+    /* This is the child (bg) */
         if (isRedir) { redir(args); }
-        status = execvp (args[0], args);
+        status = execvp (args[0], args); //run other exist command in bg
         if (status < 0) {
             printf("bad command\n");
         }
@@ -391,11 +390,11 @@ void externalRunning(char** args){ //commandArr
         jobList[jobID].pid = getpid();
         //printf("%d parent1\n",jobList[jobID].pid);
         foregroundJob = 1;
-        waitpid(pid, &status, 0);
+        waitpid(pid, &status, 0); //wait for the child to finish
     }
 }
 
-void printJobList(){
+void printJobList(){ //only print running and stopped processes
     char sign = '-';
     for (int i = 1; i <= jobID; i++)
     { 
@@ -408,26 +407,26 @@ void printJobList(){
     }
 }
 
-void fg(int id){
-    if (id <= jobID && id > 0 && strcmp(jobList[id].processStatus,"Done")!=0) {
+void fg(int id){ //bring bg process to run in fg
+    if (id <= jobID && id > 0 && strcmp(jobList[id].processStatus,"Done")!=0) { //ID is valid and not done
             int status;
-            jobList[id].isStopped = 0;
+            jobList[id].isStopped = 0; //no longer pause
             jobList[id].processStatus = "Running"; //back to work
             printf("[%d] %d\n",jobList[id].jobID,jobList[id].pid);
-            kill(jobList[id].pid, SIGCONT); // resume the process
+            kill(jobList[id].pid, SIGCONT); //  call SIGCONT to resume the process 
             foregroundJob = 1; //back to foreground
-            waitpid(jobList[id].pid, &status, 0); // Wait for the process to finish
+            //waitpid(jobList[id].pid, &status, 0); 
             externalRunning(toTokens(jobList[id].commands));
     } else {
         printf("Invalid job ID\n");
     }
 }  
 
-void bg(int id){
-    if (id <= jobID && id > 0 && jobList[id].isStopped == 1) {
-        jobList[id].isStopped = 0;
+void bg(int id){   //bring stopped process to run in bg
+    if (id <= jobID && id > 0 && jobList[id].isStopped == 1) { //ID is valid and being stopped
+        jobList[id].isStopped = 0; //no longer pause
         jobList[id].processStatus = "Running"; //back to work
-        kill(jobList[id].pid, SIGCONT); // resume the process
+        kill(jobList[id].pid, SIGCONT); // call SIGCONT to resume the process 
         foregroundJob = 0; //in background
         int status;
         pid_t pid = fork(); 
@@ -435,13 +434,13 @@ void bg(int id){
             perror ("Fork failed");
             exit(1);
         } else if (!pid){  //run in bg
-            status = execvp (jobList[id].commands[0], jobList[id].commands);
+            status = execvp (jobList[id].commands[0], jobList[id].commands); 
             if (status < 0) {
                 printf("bad command\n");
                 exit(1);  
             }
         } else { //parent 
-            printf("[%d]+ %s&\n",jobList[id].jobID,jobList[id].commands);
+            printf("[%d]+ %s&\n",jobList[id].jobID,jobList[id].commands); // dont Wait for the process to finish
         }
     } else {
         printf("Invalid job ID\n");
@@ -517,7 +516,7 @@ void command(char** current, char** prev) {
             printf("$ echo $?\n%s\n$\n",current[1]);
             int num = atoi(current[1]);
             if (num > 255) {
-                num = num & 0xFF; //0b1111111
+                num = num & 0xFF; //0b1111111 == 255 in decimal // truncate to 8 bits
             }
                 exit(num);
         }
@@ -525,9 +524,11 @@ void command(char** current, char** prev) {
         int isJobBG = 0;
         int i = 0;
         while (current[i] != NULL) {
+            /*Check if ir reDir*/
             if (strcmp(current[i], "<") == 0 || strcmp(current[i], ">") == 0) {
                 isRedir = 1;
                 break;
+            /*Check if ir BG job*/
             } else if (strcmp(current[i], "&") == 0 ) {
                 isJobBG = 1;
                 current[i] = NULL; //remove last
@@ -542,10 +543,10 @@ void command(char** current, char** prev) {
                 exit(1);
             } else if (!pid){ //child
                 foregroundJob = 0;
-                externalRunning(current);   
+                externalRunning(current);  //run in bg 
                 exit(1);
             } else { //parent
-                addJob(pid,tokenStr(current,0));
+                addJob(pid,tokenStr(current,0)); 
             }
         } else {
             foregroundJob = 1;
@@ -562,13 +563,13 @@ void readScripts(char* fileName){
     if (file == NULL) { printf("Invalid Filename\n");}
     else {
         char buffer[MAX_CMD_BUFFER];
-        prevBufferArr = toTokens(buffer); 
-        prevPrevBufferArr = toTokens(buffer);
+        prevBufferArr = toTokens(buffer);  // set to nothing at first
+        prevPrevBufferArr = toTokens(buffer); // set to nothing at first
         while (fgets(buffer, MAX_LINE_LENGTH, file) != NULL) {
-            curBufferArr = toTokens(buffer); 
+            curBufferArr = toTokens(buffer); // list of str
             command(curBufferArr, prevBufferArr);
-            prevPrevBufferArr = copyTokens(prevBufferArr);
-            prevBufferArr = copyTokens(curBufferArr);
+            prevPrevBufferArr = copyTokens(prevBufferArr); //update
+            prevBufferArr = copyTokens(curBufferArr); //update
             free(curBufferArr);
         }
         fclose(file);
